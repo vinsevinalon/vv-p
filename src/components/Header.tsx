@@ -1,6 +1,6 @@
 const Header = () => {
     return (
-        <header className="border-b-[3px] md:border-b-[4px] border-[#1A1A1A] p-4 md:p-6 flex flex-col sm:flex-row justify-between items-center bg-white gap-4 md:gap-0">
+        <header className="border-b-[3px] md:border-b-[4px] border-[#1A1A1A] p-4 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-4 md:gap-0">
             <div className="text-xl md:text-2xl font-black bg-[#1A1A1A] text-white px-3 py-1 cursor-default select-none transform sm:-rotate-1 shadow-[4px_4px_0px_0px_#4ECDC4]">
                 VINSE_V
             </div>

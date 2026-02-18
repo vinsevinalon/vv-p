@@ -15,10 +15,10 @@ const Hero = () => {
                         Shopify engineering with zero fluff.
                     </p>
                     <div className="flex flex-wrap gap-2 md:gap-3 text-[10px] md:text-xs uppercase font-mono">
-                        <span className="bg-[#FF6B6B] text-white px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">Liquid</span>
-                        <span className="bg-[#4ECDC4] text-[#1A1A1A] px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">GraphQL</span>
-                        <span className="bg-[#FFE66D] text-[#1A1A1A] px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">Node</span>
-                        <span className="bg-[#1A1A1A] text-white px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">React</span>
+                        <span className="text-white px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">Liquid</span>
+                        <span className="text-[#1A1A1A] px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">GraphQL</span>
+                        <span className="text-[#1A1A1A] px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">Node</span>
+                        <span className="text-white px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">React</span>
                     </div>
                 </div>
             </div>
