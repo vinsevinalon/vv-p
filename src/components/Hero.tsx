@@ -1,24 +1,23 @@
 const Hero = () => {
     return (
-        <section className="p-6 md:p-12 border-b-[3px] md:border-b-[4px] border-[#1A1A1A]">
-            <div className="space-y-6 md:space-y-10">
-                <div className="text-[10px] md:text-xs inline-block border-[2px] border-[#1A1A1A] px-3 md:px-4 py-1 md:py-1.5 bg-[#FFE66D] font-mono font-bold shadow-[2px_2px_0px_0px_#1A1A1A] md:shadow-[3px_3px_0px_0px_#1A1A1A]">
-                    &gt; AUTH_REQ: SHOPIFY_ARCHITECT
+        <section className="flex min-h-[calc(100dvh-10.75rem)] flex-1 items-end border-b-[3px] border-[#1A1A1A] p-5 sm:min-h-[calc(100dvh-11.5rem)] sm:p-8 md:min-h-[calc(100dvh-13rem)] md:border-b-[4px] md:p-12">
+            <div className="w-full max-w-4xl space-y-6 sm:space-y-8 md:space-y-10">
+                <div className="inline-block max-w-full border-[2px] border-[#1A1A1A] bg-[#1A1A1A] px-3 py-1 font-mono text-[10px] font-bold leading-tight text-white shadow-[2px_2px_0px_0px_#1A1A1A] sm:px-4 sm:py-1.5 sm:text-xs md:shadow-[3px_3px_0px_0px_#1A1A1A]">
+                    FULL STACK ENGINEER
                 </div>
-                <h1 className="text-5xl sm:text-7xl md:text-9xl lg:text-[10rem] font-black uppercase leading-[0.9] md:leading-[0.85] tracking-tighter break-all sm:break-normal">
-                    RAW_CODE <br />
-                    HARD_WARES.
+                <h1 className="max-w-[8ch] text-5xl font-black uppercase leading-[0.86] tracking-normal text-white drop-shadow-[4px_4px_0_rgba(26,26,26,0.9)] sm:max-w-none sm:text-7xl md:text-8xl lg:text-9xl">
+                    Raw Code <br />
+                    Hard Wares
                 </h1>
-                <div className="max-w-xl space-y-4 md:space-y-6">
-                    <p className="text-lg md:text-xl font-bold leading-tight">
-                        [DESCRIPTION] I break themes and build better ones. Fullstack
-                        Shopify engineering with zero fluff.
+                <div className="max-w-2xl space-y-4 sm:space-y-5 md:space-y-6">
+                    <p className="text-base font-bold leading-snug sm:text-lg md:text-xl">
+                        A decade of breaking things and building better ones.
+                        Redefining the limits of web and e-commerce.
                     </p>
-                    <div className="flex flex-wrap gap-2 md:gap-3 text-[10px] md:text-xs uppercase font-mono">
-                        <span className="text-white px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">Liquid</span>
-                        <span className="text-[#1A1A1A] px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">GraphQL</span>
-                        <span className="text-[#1A1A1A] px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">Node</span>
-                        <span className="text-white px-2 md:px-3 py-1 border-[2px] border-[#1A1A1A]">React</span>
+                    <div className="flex max-w-full flex-wrap gap-2 font-mono text-[10px] uppercase leading-tight sm:gap-3 sm:text-xs">
+                        <span className="max-w-full break-words border-[2px] border-[#1A1A1A] px-2 py-1 text-white sm:px-3">Web Application</span>
+                        <span className="max-w-full break-words border-[2px] border-[#1A1A1A] px-2 py-1 text-white sm:px-3">E-Commerce</span>
+                        <span className="max-w-full break-words border-[2px] border-[#1A1A1A] px-2 py-1 text-white sm:px-3">Agentic Engineering</span>
                     </div>
                 </div>
             </div>

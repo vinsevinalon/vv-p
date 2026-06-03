@@ -34,6 +34,11 @@ function deviceOrientationToQuaternion(
 const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 const needsPermission = typeof (DeviceOrientationEvent as any).requestPermission === 'function';
 
+const getViewportSize = () => ({
+    width: Math.round(window.visualViewport?.width ?? window.innerWidth),
+    height: Math.round(window.visualViewport?.height ?? window.innerHeight),
+});
+
 export default function SkyBackground() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     // showButton: only shown on iOS where explicit permission is required
@@ -53,12 +58,13 @@ export default function SkyBackground() {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
+        const viewport = getViewportSize();
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(viewport.width, viewport.height, false);
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(75, viewport.width / viewport.height, 0.1, 1000);
 
         // Equirectangular sphere
         const geometry = new THREE.SphereGeometry(500, 60, 40);
@@ -128,11 +134,13 @@ export default function SkyBackground() {
         }
 
         const onResize = () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
+            const nextViewport = getViewportSize();
+            camera.aspect = nextViewport.width / nextViewport.height;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(nextViewport.width, nextViewport.height, false);
         };
         window.addEventListener('resize', onResize);
+        window.visualViewport?.addEventListener('resize', onResize);
 
         let animId: number;
         const animate = () => {
@@ -160,6 +168,7 @@ export default function SkyBackground() {
             material.dispose();
             texture.dispose();
             window.removeEventListener('resize', onResize);
+            window.visualViewport?.removeEventListener('resize', onResize);
             window.removeEventListener('mousedown', onMouseDown);
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
@@ -192,10 +201,11 @@ export default function SkyBackground() {
                     position: 'fixed',
                     inset: 0,
                     zIndex: -1,
-                    width: '100vw',
-                    height: '100vh',
+                    width: '100dvw',
+                    height: '100dvh',
                     display: 'block',
                     cursor: isMobile ? 'default' : 'grab',
+                    touchAction: 'none',
                 }}
             />
             {showButton && (
@@ -203,12 +213,13 @@ export default function SkyBackground() {
                     onClick={requestPermission}
                     style={{
                         position: 'fixed',
-                        bottom: '24px',
+                        bottom: 'calc(16px + env(safe-area-inset-bottom))',
                         left: '50%',
                         transform: 'translateX(-50%)',
                         zIndex: 100,
+                        width: 'min(280px, calc(100vw - 32px))',
                         background: '#1A1A1A',
-                        color: '#FFE66D',
+                        color: '#FFFFFF',
                         border: '2px solid #FFE66D',
                         padding: '10px 20px',
                         fontFamily: 'monospace',
@@ -220,7 +231,7 @@ export default function SkyBackground() {
                         boxShadow: '3px 3px 0 #FFE66D',
                     }}
                 >
-                    ⟳ Enable Gyroscope
+                    Enable Gyroscope
                 </button>
             )}
         </>
