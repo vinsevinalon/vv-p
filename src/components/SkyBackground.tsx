@@ -1,6 +1,13 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { registerGyroRequester, setSkyProgress } from '../lib/skyBridge';
+import {
+    registerGyroRequester,
+    registerSkySwitcher,
+    readStoredTheme,
+    setSkyProgress,
+    SKY_SOURCES,
+    type SkyTheme,
+} from '../lib/skyBridge';
 
 /**
  * Converts DeviceOrientationEvent angles to a Three.js Quaternion
@@ -67,6 +74,59 @@ const forgetGranted = () => {
     }
 };
 
+const panoramaImages = new Map<SkyTheme, Promise<HTMLImageElement | null>>();
+
+const fetchPanoramaImage = (theme: SkyTheme, onProgress?: (value: number) => void) => {
+    const existing = panoramaImages.get(theme);
+    if (existing) {
+        // Already downloading or downloaded; this caller only needs the completion signal.
+        void existing.then(() => onProgress?.(1));
+        return existing;
+    }
+    const pending = (async (): Promise<HTMLImageElement | null> => {
+        try {
+            const response = await fetch(SKY_SOURCES[theme]);
+            if (!response.ok) throw new Error(String(response.status));
+            const total = Number(response.headers.get('content-length')) || 0;
+            let blob: Blob;
+            if (!response.body || !total) {
+                blob = await response.blob();
+            } else {
+                const reader = response.body.getReader();
+                const chunks: ArrayBuffer[] = [];
+                let received = 0;
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    // Copy out so the Blob owns plain ArrayBuffers.
+                    chunks.push(value.slice().buffer as ArrayBuffer);
+                    received += value.length;
+                    // Hold back the last percent until the image has actually decoded.
+                    onProgress?.(Math.min(0.99, received / total));
+                }
+                blob = new Blob(chunks, { type: 'image/jpeg' });
+            }
+            const url = URL.createObjectURL(blob);
+            const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+                const el = new Image();
+                el.onload = () => resolve(el);
+                el.onerror = () => reject(new Error('decode failed'));
+                el.src = url;
+            });
+            // The decoded image is retained for the page's lifetime, so the blob URL is too.
+            onProgress?.(1);
+            return image;
+        } catch {
+            // Never trap the visitor behind the loading screen because of a failed image.
+            panoramaImages.delete(theme);
+            onProgress?.(1);
+            return null;
+        }
+    })();
+    panoramaImages.set(theme, pending);
+    return pending;
+};
+
 type DeviceOrientationConstructorWithPermission = typeof DeviceOrientationEvent & {
     requestPermission?: () => Promise<'granted' | 'denied'>;
 };
@@ -92,67 +152,70 @@ export default function SkyBackground() {
         const geometry = new THREE.SphereGeometry(500, 60, 40);
         geometry.scale(-1, 1, 1);
 
-        // Streamed by hand rather than through TextureLoader: ImageLoader gives no progress
-        // events for <img>, and the loading screen needs a real byte count to show.
-        const texture = new THREE.Texture();
-        texture.colorSpace = THREE.SRGBColorSpace;
-        const material = new THREE.MeshBasicMaterial({ map: texture });
-        scene.add(new THREE.Mesh(geometry, material));
+        // Two skies stacked so a theme change can cross-fade instead of cutting. depthTest is
+        // off and draw order is explicit, which avoids z-fighting between identical spheres.
+        const settled = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+        const incoming = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+        const settledMesh = new THREE.Mesh(geometry, settled);
+        const incomingMesh = new THREE.Mesh(geometry, incoming);
+        settledMesh.renderOrder = 0;
+        incomingMesh.renderOrder = 1;
+        incomingMesh.visible = false;
+        scene.add(settledMesh);
+        scene.add(incomingMesh);
 
         const isPowerOfTwo = (n: number) => n > 0 && (n & (n - 1)) === 0;
-        const panoramaImage = new Image();
-        let objectUrl = '';
+        const textureCache = new Map<SkyTheme, THREE.Texture>();
         let cancelled = false;
 
-        panoramaImage.onload = () => {
-            if (cancelled) return;
-            const { width, height } = panoramaImage;
+        const loadPanorama = async (
+            theme: SkyTheme,
+            onProgress?: (value: number) => void,
+        ): Promise<THREE.Texture | null> => {
+            const cached = textureCache.get(theme);
+            if (cached) {
+                onProgress?.(1);
+                return cached;
+            }
+            const image = await fetchPanoramaImage(theme, onProgress);
+            if (cancelled || !image) return null;
+
+            const texture = new THREE.Texture(image);
+            texture.colorSpace = THREE.SRGBColorSpace;
             // A non-power-of-two texture with a mipmap minFilter renders black under WebGL1
-            // and on stricter mobile drivers, so only mipmap when the dimensions allow it.
-            const potSafe = isPowerOfTwo(width) && isPowerOfTwo(height);
-            texture.image = panoramaImage;
+            // and on stricter mobile drivers, so only mipmap when it is safe.
+            const potSafe = isPowerOfTwo(image.width) && isPowerOfTwo(image.height);
             texture.generateMipmaps = potSafe;
             texture.minFilter = potSafe ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
             texture.anisotropy = potSafe ? renderer.capabilities.getMaxAnisotropy() : 1;
             texture.needsUpdate = true;
-            material.needsUpdate = true;
-            setSkyProgress(1);
-        };
-        panoramaImage.onerror = () => {
-            // Never trap the visitor behind the loading screen because of a failed image.
-            setSkyProgress(1);
+
+            textureCache.set(theme, texture);
+            return texture;
         };
 
-        void (async () => {
-            try {
-                const response = await fetch('/360.jpg');
-                if (!response.ok) throw new Error(String(response.status));
-                const total = Number(response.headers.get('content-length')) || 0;
-                let blob: Blob;
-                if (!response.body || !total) {
-                    blob = await response.blob();
-                } else {
-                    const reader = response.body.getReader();
-                    const chunks: ArrayBuffer[] = [];
-                    let received = 0;
-                    for (;;) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        // Copy out so the Blob owns plain ArrayBuffers.
-                        chunks.push(value.slice().buffer as ArrayBuffer);
-                        received += value.length;
-                        // Hold back the last percent until the image has actually decoded.
-                        setSkyProgress(Math.min(0.99, received / total));
-                    }
-                    blob = new Blob(chunks, { type: 'image/jpeg' });
-                }
-                if (cancelled) return;
-                objectUrl = URL.createObjectURL(blob);
-                panoramaImage.src = objectUrl;
-            } catch {
-                setSkyProgress(1);
-            }
-        })();
+        let activeTheme = readStoredTheme();
+        const fade = { active: false, elapsed: 0, duration: 650 };
+
+        void loadPanorama(activeTheme, setSkyProgress).then((texture) => {
+            if (cancelled || !texture) return;
+            settled.map = texture;
+            settled.needsUpdate = true;
+        });
+
+        const switchSky = async (theme: SkyTheme) => {
+            if (cancelled || theme === activeTheme || fade.active) return;
+            const texture = await loadPanorama(theme);
+            if (cancelled || !texture) return;
+            activeTheme = theme;
+            incoming.map = texture;
+            incoming.opacity = 0;
+            incoming.needsUpdate = true;
+            incomingMesh.visible = true;
+            fade.elapsed = 0;
+            fade.active = true;
+        };
+        const unregisterSwitcher = registerSkySwitcher(switchSky);
 
         // Gyro state is scoped to this effect so a StrictMode remount cannot let a stale
         // handler calibrate against a disposed camera.
@@ -341,6 +404,20 @@ export default function SkyBackground() {
                 phi += (clampPhi(Math.PI / 2 + Math.sin(now * 0.00007) * sway) - phi) * 0.02;
                 applyPointerLook();
             }
+            if (fade.active) {
+                fade.elapsed += elapsed;
+                const k = Math.min(1, fade.elapsed / fade.duration);
+                incoming.opacity = k;
+                if (k >= 1) {
+                    // Hand the finished sky to the settled layer and park the overlay.
+                    settled.map = incoming.map;
+                    settled.needsUpdate = true;
+                    incoming.opacity = 0;
+                    incoming.map = null;
+                    incomingMesh.visible = false;
+                    fade.active = false;
+                }
+            }
             renderer.render(scene, camera);
             animId = requestAnimationFrame(animate);
         };
@@ -363,13 +440,14 @@ export default function SkyBackground() {
         return () => {
             cancelled = true;
             unregisterGyro();
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            unregisterSwitcher();
             cancelAnimationFrame(animId);
             clearTimeout(probeTimer);
             renderer.dispose();
             geometry.dispose();
-            material.dispose();
-            texture.dispose();
+            settled.dispose();
+            incoming.dispose();
+            textureCache.forEach((texture) => texture.dispose());
             window.removeEventListener('resize', onResize);
             window.visualViewport?.removeEventListener('resize', onResize);
             window.removeEventListener('pointermove', onPointerMove);
