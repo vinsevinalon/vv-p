@@ -49,10 +49,10 @@ Three settings in `vite.config.ts` exist for concrete reasons — don't strip th
 ## Layout
 
 ```
-index.html                     Vite entry; loads Google Fonts (Syne, Space Mono)
+index.html                     Vite entry; loads Google Fonts (JetBrains Mono)
 src/main.tsx                   React root (StrictMode)
 src/App.tsx                    Page shell: SkyBackground + LoadingScreen + ThemeToggle,
-                               then header/main/footer
+                               then header/main content
 src/index.css                  Tailwind import + :root typography; backgrounds are transparent
                                so the canvas shows through
 src/lib/
@@ -106,6 +106,8 @@ Input mode comes from `window.matchMedia('(pointer: coarse)')`:
 - **Fine pointer (desktop)** — a `pointermove` listener maps cursor position to target angles, eased each frame. The camera *follows the cursor*; there is no drag interaction.
 - **Coarse pointer (touch)** — no look-around gestures are registered at all. The view is gyroscope-driven, with a slow ambient drift as the fallback until the sensor engages. The drift is suppressed under `prefers-reduced-motion: reduce`.
 
+The camera derives its vertical field of view from a 130° diagonal target and clamps it to 90–110°. This keeps the panorama's apparent scale consistent across landscape and portrait screens; a fixed vertical FOV crops portrait screens too tightly and makes the clouds look close. Recalculate it whenever the viewport aspect ratio changes. The neutral yaw is `Math.PI`, facing the open center of each panorama instead of the close clouds beside the texture seam.
+
 `deviceOrientationToQuaternion(alpha, beta, gamma, screenAngle)` implements the W3C conversion (Euler `YXZ`, the `-√0.5` device→camera frame rotation, then the screen-angle rotation about Z). Readings land in `gyro.target`; the loop slerps toward it with frame-rate-independent smoothing so motion stays smooth at any refresh rate. Gyro state is scoped inside the effect so a StrictMode remount can't leave a stale handler calibrating against a disposed camera.
 
 ### The iOS permission dance — read before touching it
@@ -126,7 +128,7 @@ There is no on-screen debug HUD; the `?gyroDebug` overlay that used to exist has
 - **Mobile-first responsive.** Base classes target small screens; layer up with `sm:` / `md:` / `lg:`. Use `dvh` not `vh` — mobile browser chrome makes `vh` wrong.
 - **The sky stays visible.** `html`, `body`, `#root` and the layout containers are deliberately transparent, and successive commits stripped hard borders, panel fills, and drop shadows to that end. Don't reintroduce opaque panels or text shadows on the content layer without being asked. The two exceptions are intentional and use **blur, not fill**: the loading screen's `backdrop-filter` (no background colour, so the live sky shows through while it loads) and the theme toggle's blurred ring.
 - **`inset-0` is wrong for full-viewport overlays here.** A fixed element resolves against the viewport minus the scrollbar and leaves a sliver of sky uncovered; the loading screen uses `left/top: 0` with explicit `100dvw × 100dvh` instead. Match that if you add another overlay.
-- **Palette:** ink `#1A1A1A`, teal `#4ECDC4` (accent, focus rings, progress bar), coral `#FF6B6B`, yellow `#FFE66D`, on white text. Fonts: Syne (display/sans) and Space Mono (`font-mono`).
+- **Palette:** ink `#1A1A1A`, teal `#4ECDC4` (accent, focus rings, progress bar), coral `#FF6B6B`, yellow `#FFE66D`, on white text. JetBrains Mono is used for both `font-sans` and `font-mono`.
 - **Accessibility is already wired** — `role="dialog"`/`aria-modal` on the loader, a real `progressbar` with `aria-valuenow`, focus moved to Enter as it appears, `aria-label`/`aria-busy` on the toggle, and `focus-visible` rings throughout. Don't regress it.
 - **Comments explain *why*, not *what*.** The existing ones flag browser quirks and non-obvious intent. Match that density — sparse and load-bearing.
 - **Commits: Conventional Commits** (`feat:`, `fix:`, `style:`, `perf:`, `chore:`, `docs:`). Subject in the imperative, followed by a short body explaining the reasoning when the change isn't self-evident.

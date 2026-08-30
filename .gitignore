@@ -34,8 +34,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .agents
 .cursor
 .vscode
+skills-lock.json
 
 # Finder (MacOS) folder config
 .DS_Store
-
 

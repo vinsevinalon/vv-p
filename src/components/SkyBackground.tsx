@@ -44,6 +44,19 @@ const getViewportSize = () => ({
     height: Math.round(window.visualViewport?.height ?? window.innerHeight),
 });
 
+// Keep the apparent scale of the sky stable across landscape and portrait screens. A fixed
+// vertical FOV becomes a tight crop on phones, which makes the clouds feel unnaturally close.
+const getSkyFov = (width: number, height: number) => {
+    const aspect = width / height;
+    const diagonalFov = THREE.MathUtils.degToRad(130);
+    const verticalFov = 2 * Math.atan(Math.tan(diagonalFov / 2) / Math.sqrt(1 + aspect ** 2));
+    return THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(verticalFov), 90, 110);
+};
+
+// SphereGeometry places the texture seam at yaw 0. Both panoramas keep their open, distant
+// sky in the middle of the image, so face that direction instead of the close clouds at the seam.
+const SKY_CENTER_YAW = Math.PI;
+
 // window.orientation is deprecated and absent on current iOS; screen.orientation is the
 // supported source, so fall back only for older engines.
 const getScreenAngle = () =>
@@ -146,7 +159,12 @@ export default function SkyBackground() {
         renderer.setSize(viewport.width, viewport.height, false);
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, viewport.width / viewport.height, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(
+            getSkyFov(viewport.width, viewport.height),
+            viewport.width / viewport.height,
+            0.1,
+            1000,
+        );
 
         // Equirectangular sphere
         const geometry = new THREE.SphereGeometry(500, 60, 40);
@@ -233,7 +251,7 @@ export default function SkyBackground() {
 
         // Desktop only: the view follows the cursor. Touch devices are gyroscope-only and
         // register no look-around gestures at all.
-        let theta = 0, phi = Math.PI / 2;
+        let theta = SKY_CENTER_YAW, phi = Math.PI / 2;
         let targetTheta = theta;
         let targetPhi = phi;
         const clampPhi = (p: number) => Math.max(0.05, Math.min(Math.PI - 0.05, p));
@@ -251,7 +269,7 @@ export default function SkyBackground() {
             const pointerViewport = getViewportSize();
             const normalizedX = e.clientX / pointerViewport.width - 0.5;
             const normalizedY = e.clientY / pointerViewport.height - 0.5;
-            targetTheta = -normalizedX * 0.9;
+            targetTheta = SKY_CENTER_YAW - normalizedX * 0.9;
             targetPhi = clampPhi(Math.PI / 2 + normalizedY * 0.55);
         };
         if (!isCoarsePointer) {
@@ -377,6 +395,7 @@ export default function SkyBackground() {
         const onResize = () => {
             const nextViewport = getViewportSize();
             camera.aspect = nextViewport.width / nextViewport.height;
+            camera.fov = getSkyFov(nextViewport.width, nextViewport.height);
             camera.updateProjectionMatrix();
             renderer.setSize(nextViewport.width, nextViewport.height, false);
         };
