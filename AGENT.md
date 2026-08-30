@@ -133,10 +133,29 @@ There is no on-screen debug HUD; the `?gyroDebug` overlay that used to exist has
 - **Comments explain *why*, not *what*.** The existing ones flag browser quirks and non-obvious intent. Match that density — sparse and load-bearing.
 - **Commits: Conventional Commits** (`feat:`, `fix:`, `style:`, `perf:`, `chore:`, `docs:`). Subject in the imperative, followed by a short body explaining the reasoning when the change isn't self-evident.
 
+## Branching and deployment
+
+`main` is the production branch and maps to [vv-p.vercel.app](https://vv-p.vercel.app). `develop` is the integration branch for all development. Start work from an up-to-date `develop`; keep `main` unchanged until the work is verified and explicitly approved for release.
+
+### Develop and preview
+
+1. Switch to `develop`, pull it with `--ff-only`, and make the change there.
+2. Run `bun run build`. The step is complete only when type-checking and the Vite production bundle both pass.
+3. Commit with a Conventional Commit message and push `develop`.
+4. Use the Vercel preview created from `develop` to verify the loading gate, both sky themes, panorama requests, responsive layout, and browser console. Gyroscope changes also require a real phone over HTTPS. The change is release-ready only when every relevant check passes.
+
+### Release to production
+
+1. Get explicit release approval, then open a pull request from `develop` into `main`. The pull request is the reviewable release boundary; direct development commits do not go to `main`.
+2. Confirm the latest `develop` preview is `READY` and matches the commit being merged.
+3. Merge the pull request into `main`. Vercel automatically builds and deploys that commit to production; routine releases do not use a manual file deployment.
+4. Verify [vv-p.vercel.app](https://vv-p.vercel.app) returns HTTP 200, both panorama assets load, the deployment is `READY`, and Vercel reports no runtime errors.
+5. Return to `develop` and fast-forward it from `main` so the branches share the released history before new work begins.
+
 ## Working agreements
 
 - Verify with `bun run build` before reporting done, and say so.
 - `dist/` is gitignored — never commit build output.
 - Don't add dependencies for things the stack already covers. Especially: no CSS-in-JS, no animation library (CSS transitions and the rAF loop cover current needs), no router until there is more than one page.
-- Don't push to `main`, force-push, or merge unless explicitly asked.
+- Push or merge into `main` only as the explicitly approved production-release step above. Never force-push either shared branch.
 - Changes to the panorama's mobile behavior can only be validated on a real device over the HTTPS LAN URL. If you can't test it, say so plainly rather than claiming it works.
