@@ -2,10 +2,10 @@ const Hero = () => {
     return (
         <section className="flex min-h-[calc(100dvh-10.75rem)] flex-1 items-end p-5 sm:min-h-[calc(100dvh-11.5rem)] sm:p-8 md:min-h-[calc(100dvh-13rem)] md:p-12">
             <div className="w-full max-w-4xl space-y-6 sm:space-y-8 md:space-y-10">
-                <div className="inline-block max-w-full bg-[#1A1A1A] px-3 py-1 font-mono text-[10px] font-bold leading-tight text-white shadow-[2px_2px_0px_0px_#1A1A1A] sm:px-4 sm:py-1.5 sm:text-xs md:shadow-[3px_3px_0px_0px_#1A1A1A]">
+                <div className="inline-block max-w-full bg-[#1A1A1A] px-3 py-1 font-mono text-[10px] font-bold leading-tight text-white sm:px-4 sm:py-1.5 sm:text-xs">
                     FULL STACK ENGINEER
                 </div>
-                <h1 className="max-w-[8ch] text-5xl font-black uppercase leading-[0.86] tracking-normal text-white drop-shadow-[4px_4px_0_rgba(26,26,26,0.9)] sm:max-w-none sm:text-7xl md:text-8xl lg:text-9xl">
+                <h1 className="max-w-[8ch] text-5xl font-black uppercase leading-[0.86] tracking-normal text-white sm:max-w-none sm:text-7xl md:text-8xl lg:text-9xl">
                     Raw Code <br />
                     Hard Wares
                 </h1>
