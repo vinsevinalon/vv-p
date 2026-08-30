@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { registerGyroRequester, setSkyProgress } from '../lib/skyBridge';
 
 /**
  * Converts DeviceOrientationEvent angles to a Three.js Quaternion
@@ -58,6 +59,13 @@ const rememberGranted = () => {
         // Private mode; the next visit simply asks again on first touch.
     }
 };
+const forgetGranted = () => {
+    try {
+        window.localStorage.removeItem(GRANTED_KEY);
+    } catch {
+        // Nothing cached to clear.
+    }
+};
 
 type DeviceOrientationConstructorWithPermission = typeof DeviceOrientationEvent & {
     requestPermission?: () => Promise<'granted' | 'denied'>;
@@ -65,11 +73,6 @@ type DeviceOrientationConstructorWithPermission = typeof DeviceOrientationEvent 
 
 export default function SkyBackground() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const debugGyro = new URLSearchParams(window.location.search).has('gyroDebug');
-    const [gyroStatus, setGyroStatus] = useState('initializing');
-    const [gyroReading, setGyroReading] = useState('');
-    const [gyroActivation, setGyroActivation] = useState('');
-    const [gyroPlatform, setGyroPlatform] = useState('');
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -88,18 +91,68 @@ export default function SkyBackground() {
         // Equirectangular sphere
         const geometry = new THREE.SphereGeometry(500, 60, 40);
         geometry.scale(-1, 1, 1);
-        const texture = new THREE.TextureLoader().load('/360.jpg', () => {
-            // Reveal only once pixels exist, so the first paint is never a black frame.
-            canvas.style.opacity = '1';
-        });
+
+        // Streamed by hand rather than through TextureLoader: ImageLoader gives no progress
+        // events for <img>, and the loading screen needs a real byte count to show.
+        const texture = new THREE.Texture();
         texture.colorSpace = THREE.SRGBColorSpace;
-        // Equirectangular panoramas are viewed at steep glancing angles near the poles,
-        // where anisotropy is the difference between crisp and smeared.
-        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-        texture.generateMipmaps = true;
-        texture.minFilter = THREE.LinearMipmapLinearFilter;
         const material = new THREE.MeshBasicMaterial({ map: texture });
         scene.add(new THREE.Mesh(geometry, material));
+
+        const isPowerOfTwo = (n: number) => n > 0 && (n & (n - 1)) === 0;
+        const panoramaImage = new Image();
+        let objectUrl = '';
+        let cancelled = false;
+
+        panoramaImage.onload = () => {
+            if (cancelled) return;
+            const { width, height } = panoramaImage;
+            // A non-power-of-two texture with a mipmap minFilter renders black under WebGL1
+            // and on stricter mobile drivers, so only mipmap when the dimensions allow it.
+            const potSafe = isPowerOfTwo(width) && isPowerOfTwo(height);
+            texture.image = panoramaImage;
+            texture.generateMipmaps = potSafe;
+            texture.minFilter = potSafe ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
+            texture.anisotropy = potSafe ? renderer.capabilities.getMaxAnisotropy() : 1;
+            texture.needsUpdate = true;
+            material.needsUpdate = true;
+            setSkyProgress(1);
+        };
+        panoramaImage.onerror = () => {
+            // Never trap the visitor behind the loading screen because of a failed image.
+            setSkyProgress(1);
+        };
+
+        void (async () => {
+            try {
+                const response = await fetch('/360.jpg');
+                if (!response.ok) throw new Error(String(response.status));
+                const total = Number(response.headers.get('content-length')) || 0;
+                let blob: Blob;
+                if (!response.body || !total) {
+                    blob = await response.blob();
+                } else {
+                    const reader = response.body.getReader();
+                    const chunks: ArrayBuffer[] = [];
+                    let received = 0;
+                    for (;;) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        // Copy out so the Blob owns plain ArrayBuffers.
+                        chunks.push(value.slice().buffer as ArrayBuffer);
+                        received += value.length;
+                        // Hold back the last percent until the image has actually decoded.
+                        setSkyProgress(Math.min(0.99, received / total));
+                    }
+                    blob = new Blob(chunks, { type: 'image/jpeg' });
+                }
+                if (cancelled) return;
+                objectUrl = URL.createObjectURL(blob);
+                panoramaImage.src = objectUrl;
+            } catch {
+                setSkyProgress(1);
+            }
+        })();
 
         // Gyro state is scoped to this effect so a StrictMode remount cannot let a stale
         // handler calibrate against a disposed camera.
@@ -114,8 +167,6 @@ export default function SkyBackground() {
             screenAngle: getScreenAngle(),
             events: 0,
         };
-        // Reported on the debug badge; the ambient fallback no longer depends on it.
-        let gyroUnavailable = false;
 
         // Desktop only: the view follows the cursor. Touch devices are gyroscope-only and
         // register no look-around gestures at all.
@@ -144,19 +195,12 @@ export default function SkyBackground() {
             window.addEventListener('pointermove', onPointerMove);
         }
 
-        // Gyro orientation handler
         const handleOrientation = (e: DeviceOrientationEvent) => {
             if (e.beta === null || e.gamma === null) return;
             const alpha = e.alpha ?? 0;
+            if (gyro.events === 0) clearTimeout(probeTimer);
             gyro.events += 1;
             gyro.active = true;
-            setGyroStatus('sensor active');
-            if (debugGyro) {
-                setGyroReading(
-                    `a${alpha.toFixed(0)} b${e.beta.toFixed(0)} g${e.gamma.toFixed(0)}`
-                    + ` s${gyro.screenAngle} n${gyro.events}`,
-                );
-            }
 
             const q = deviceOrientationToQuaternion(alpha, e.beta, e.gamma, gyro.screenAngle);
             if (!gyro.calibrated) {
@@ -178,7 +222,7 @@ export default function SkyBackground() {
 
         let orientationListening = false;
         let permissionPending = false;
-        let noEventTimer = 0;
+        let probeTimer = 0;
         const orientationEvent = 'DeviceOrientationEvent' in window
             ? window.DeviceOrientationEvent as DeviceOrientationConstructorWithPermission
             : null;
@@ -186,91 +230,54 @@ export default function SkyBackground() {
         const startOrientation = () => {
             if (orientationListening) return;
             orientationListening = true;
-            setGyroStatus('listening for sensor data');
             gyro.screenAngle = getScreenAngle();
             window.addEventListener('deviceorientation', handleOrientation, true);
             window.addEventListener('orientationchange', handleScreenOrientation);
             window.screen?.orientation?.addEventListener('change', handleScreenOrientation);
-            // Permission can succeed on a device that never emits a reading.
-            noEventTimer = window.setTimeout(() => {
-                if (gyro.events === 0) {
-                    gyroUnavailable = true;
-                    setGyroStatus('no sensor data after 3s');
-                }
-            }, 3000);
         };
 
-        if (debugGyro) {
-            const hasPermissionApi =
-                typeof (window.DeviceOrientationEvent as DeviceOrientationConstructorWithPermission
-                    | undefined)?.requestPermission === 'function';
-            setGyroPlatform(
-                `perm-api:${hasPermissionApi} secure:${window.isSecureContext}`
-                + ` coarse:${isCoarsePointer} ${navigator.platform || 'unknown'}`,
-            );
-        }
-
-        let activationCount = 0;
-        const requestOrientationPermission = (trigger: string) => {
+        const requestOrientationPermission = () => {
             if (
-                orientationListening
+                gyro.events > 0
                 || permissionPending
                 || typeof orientationEvent?.requestPermission !== 'function'
             ) return;
 
             permissionPending = true;
-            // Whether WebKit credits this turn with transient activation is the decisive
-            // datum when the request is refused.
-            const active = navigator.userActivation?.isActive;
-            const activationLabel = active === undefined ? 'unknown' : String(active);
-            if (debugGyro) {
-                setGyroActivation(`via ${trigger} act:${activationLabel} n${activationCount}`);
-            }
             // Invoked synchronously so Safari still sees the transient user activation.
-            const pending = orientationEvent.requestPermission();
-            setGyroStatus('requesting Safari permission');
-            pending
+            orientationEvent.requestPermission()
                 .then((permission) => {
                     if (permission === 'granted') {
                         rememberGranted();
                         startOrientation();
                     } else {
-                        gyroUnavailable = true;
-                        try {
-                            window.localStorage.removeItem(GRANTED_KEY);
-                        } catch {
-                            // Nothing cached to clear.
-                        }
-                        setGyroStatus('permission denied');
+                        forgetGranted();
                     }
                 })
-                .catch((error: unknown) => {
-                    // Safari rejects until the call originates from a real gesture.
-                    setGyroStatus(error instanceof DOMException ? error.name : 'permission error');
+                .catch(() => {
+                    // Safari rejects until the call originates from a real gesture; the
+                    // activation listeners below will try again on the next one.
                 })
                 .finally(() => {
                     permissionPending = false;
                 });
         };
 
-        // Any incidental gesture re-arms the request inside Safari's activation window.
-        // These listeners never move the view; they exist only to unlock the sensor.
         // Every event WebKit credits with transient activation, so the sensor unlocks on
-        // whatever the visitor happens to do first.
+        // whatever the visitor happens to do first. These listeners never move the view;
+        // they exist only to unlock the sensor if the Enter button did not manage it.
         const ACTIVATION_EVENTS = [
             'touchstart', 'touchend', 'pointerdown', 'pointerup',
             'mousedown', 'mouseup', 'click', 'keydown',
         ] as const;
-        const onActivation = (e: Event) => {
-            if (orientationListening) {
+        const onActivation = () => {
+            // Listen-first means a listener is always attached, so "already listening" is no
+            // longer proof of anything. Only real sensor data means we are done here.
+            if (gyro.events > 0) {
                 removeActivationListeners();
                 return;
             }
-            activationCount += 1;
-            if (debugGyro) {
-                setGyroActivation(`saw ${e.type} n${activationCount}`);
-            }
-            requestOrientationPermission(e.type);
+            requestOrientationPermission();
         };
         const addActivationListeners = () => {
             for (const type of ACTIVATION_EVENTS) {
@@ -283,24 +290,26 @@ export default function SkyBackground() {
             }
         };
 
-        // Enable with no interaction wherever the platform allows it. iOS Safari requires a
-        // gesture on first visit only; a previously granted origin resolves immediately here.
+        // Listen first, ask later. The permission gate is not the only path to sensor data:
+        // with Settings > Safari > Motion & Orientation Access enabled, and in Home Screen
+        // web apps, WebKit delivers deviceorientation without any requestPermission call.
+        // Asking first suppresses that path, so attach the listener unconditionally and only
+        // fall back to the permission flow if nothing actually arrives.
         if (orientationEvent) {
+            startOrientation();
             if (typeof orientationEvent.requestPermission === 'function') {
                 addActivationListeners();
-                if (wasGranted()) {
-                    // Permission state is no longer "prompt", so this resolves gesture-free.
-                    requestOrientationPermission('load');
-                } else {
-                    setGyroStatus('awaiting first gesture (iOS requirement)');
-                }
-            } else {
-                startOrientation();
+                probeTimer = window.setTimeout(() => {
+                    // Silent so far. A remembered grant resolves without activation; a first
+                    // visit is refused here and waits for the Enter button's click.
+                    if (gyro.events === 0 && wasGranted()) requestOrientationPermission();
+                }, 700);
             }
-        } else {
-            gyroUnavailable = true;
-            setGyroStatus('orientation API unavailable');
         }
+
+        // The loading screen's Enter button calls this from inside its own click handler,
+        // which is the one moment iOS will accept a permission request on a first visit.
+        const unregisterGyro = registerGyroRequester(requestOrientationPermission);
 
         const onResize = () => {
             const nextViewport = getViewportSize();
@@ -311,29 +320,25 @@ export default function SkyBackground() {
         window.addEventListener('resize', onResize);
         window.visualViewport?.addEventListener('resize', onResize);
 
-        // Smoothing constants are authored for 60fps, then rescaled so a 120Hz ProMotion
-        // display damps at the same real-world rate rather than twice as fast.
-        const smoothing = (perFrame: number, elapsed: number) =>
-            1 - Math.pow(1 - perFrame, elapsed / 16.667);
-
         let animId = 0;
         let previousFrame = performance.now();
         const animate = (now: number) => {
             const elapsed = Math.min(now - previousFrame, 50);
             previousFrame = now;
             if (gyro.active && gyro.calibrated) {
-                gyro.current.slerp(gyro.target, smoothing(0.12, elapsed));
+                gyro.current.slerp(gyro.target, 0.12);
                 camera.quaternion.copy(gyro.current);
             } else if (!isCoarsePointer) {
-                const ease = smoothing(0.06, elapsed);
-                theta += (targetTheta - theta) * ease;
-                phi += (targetPhi - phi) * ease;
+                theta += (targetTheta - theta) * 0.06;
+                phi += (targetPhi - phi) * 0.06;
                 applyPointerLook();
-            } else if (!reduceMotion) {
+            } else {
                 // Runs from load on touch devices, and yields as soon as the sensor engages.
-                theta -= elapsed * 0.00004;
-                phi += (clampPhi(Math.PI / 2 + Math.sin(now * 0.00007) * 0.06) - phi)
-                    * smoothing(0.02, elapsed);
+                // Reduced-motion gets a slower, flatter pan rather than a frozen image.
+                const rate = reduceMotion ? 0.000015 : 0.00006;
+                const sway = reduceMotion ? 0.02 : 0.06;
+                theta -= elapsed * rate;
+                phi += (clampPhi(Math.PI / 2 + Math.sin(now * 0.00007) * sway) - phi) * 0.02;
                 applyPointerLook();
             }
             renderer.render(scene, camera);
@@ -353,26 +358,14 @@ export default function SkyBackground() {
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
-
-        // Mobile GPUs reclaim contexts aggressively; without this the sky goes black for good.
-        const handleContextLost = (e: Event) => {
-            e.preventDefault();
-            cancelAnimationFrame(animId);
-            animId = 0;
-        };
-        const handleContextRestored = () => {
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, isCoarsePointer ? 1.5 : 2));
-            onResize();
-            startAnimation();
-        };
-        canvas.addEventListener('webglcontextlost', handleContextLost);
-        canvas.addEventListener('webglcontextrestored', handleContextRestored);
-
         startAnimation();
 
         return () => {
+            cancelled = true;
+            unregisterGyro();
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
             cancelAnimationFrame(animId);
-            clearTimeout(noEventTimer);
+            clearTimeout(probeTimer);
             renderer.dispose();
             geometry.dispose();
             material.dispose();
@@ -385,59 +378,20 @@ export default function SkyBackground() {
             window.removeEventListener('orientationchange', handleScreenOrientation);
             window.screen?.orientation?.removeEventListener('change', handleScreenOrientation);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
-            canvas.removeEventListener('webglcontextlost', handleContextLost);
-            canvas.removeEventListener('webglcontextrestored', handleContextRestored);
         };
-    }, [debugGyro]);
+    }, []);
 
     return (
-        <>
-            <canvas
-                ref={canvasRef}
-                style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: -1,
-                    width: '100dvw',
-                    height: '100dvh',
-                    display: 'block',
-                    opacity: 0,
-                    transition: 'opacity 900ms ease-out',
-                }}
-            />
-            <div
-                aria-hidden="true"
-                style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: -1,
-                    pointerEvents: 'none',
-                    background:
-                        'radial-gradient(ellipse at center,'
-                        + ' rgba(0,0,0,0) 45%, rgba(0,0,0,0.32) 100%)',
-                }}
-            />
-            {debugGyro && (
-                <output
-                    style={{
-                        position: 'fixed',
-                        top: 'max(12px, env(safe-area-inset-top))',
-                        right: '12px',
-                        zIndex: 1000,
-                        maxWidth: 'calc(100vw - 24px)',
-                        padding: '8px 10px',
-                        background: 'rgba(0, 0, 0, 0.8)',
-                        color: '#fff',
-                        font: '12px monospace',
-                        pointerEvents: 'none',
-                    }}
-                >
-                    Gyroscope: {gyroStatus}
-                    {gyroPlatform && <><br />{gyroPlatform}</>}
-                    {gyroActivation && <><br />{gyroActivation}</>}
-                    {gyroReading && <><br />{gyroReading}</>}
-                </output>
-            )}
-        </>
+        <canvas
+            ref={canvasRef}
+            style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: -1,
+                width: '100dvw',
+                height: '100dvh',
+                display: 'block',
+            }}
+        />
     );
 }
