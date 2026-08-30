@@ -13,7 +13,7 @@ const Projects = () => {
                     <h3 className="text-3xl sm:text-4xl md:text-5xl font-black mb-8 md:mb-16 tracking-tighter leading-none break-all underline decoration-[3px] md:decoration-4 underline-offset-4 md:underline-offset-8">
                         {item.title}
                     </h3>
-                    <div className="font-mono font-bold border-[2px] border-[#1A1A1A] inline-block px-3 py-1 text-[10px] group-hover:bg-[#1A1A1A] group-hover:text-white transition-colors">
+                    <div className="inline-block px-3 py-1 font-mono text-[10px] font-bold transition-colors group-hover:bg-[#1A1A1A] group-hover:text-white">
                         TARGET: {item.category}
                     </div>
                 </div>
