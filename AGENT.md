@@ -87,7 +87,7 @@ Path alias `@/*` → `src/*` is configured in `tsconfig.json`.
 - `setSkyProgress` / `onSkyProgress` — a 0–1 progress channel the loading screen subscribes to.
 - `registerGyroRequester` / `requestGyroNow` — **must stay synchronously callable from a click handler.** iOS only grants motion access inside a genuine user gesture, and any `await` before the call loses the activation. This is why it's an imperative registry and not a promise-returning API.
 - `registerSkySwitcher` / `switchSkyTo` — theme swap, awaited so the toggle can show a busy state.
-- `readStoredTheme` / `storeTheme` — `localStorage` key `skyTheme`, falling back to `prefers-color-scheme`.
+- `readStoredTheme` / `storeTheme` — `localStorage` key `skyTheme`, falling back to the day (`light`) sky.
 
 All `localStorage` access is wrapped in try/catch for private mode. Keep it that way.
 
