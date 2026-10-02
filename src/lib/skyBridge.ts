@@ -16,15 +16,15 @@ export const SKY_SOURCES: Record<SkyTheme, string> = {
 
 const THEME_KEY = 'skyTheme';
 
-/** Stored choice wins; otherwise follow the visitor's system preference. */
+/** Stored choice wins; otherwise open on the day sky, whatever the system preference. */
 export const readStoredTheme = (): SkyTheme => {
     try {
         const stored = window.localStorage.getItem(THEME_KEY);
         if (stored === 'light' || stored === 'dark') return stored;
     } catch {
-        // Private mode; fall through to the system preference.
+        // Private mode; fall through to the default.
     }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'light';
 };
 
 export const storeTheme = (theme: SkyTheme) => {
