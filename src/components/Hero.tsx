@@ -13,7 +13,7 @@ const Hero = () => {
                     <div className="flex max-w-full flex-wrap gap-2 font-mono text-[10px] uppercase leading-tight sm:gap-3 sm:text-xs">
                         <span className="max-w-full break-words px-2 py-1 text-white sm:px-3">Web Application</span>
                         <span className="max-w-full break-words px-2 py-1 text-white sm:px-3">E-Commerce</span>
-                        <span className="max-w-full break-words px-2 py-1 text-white sm:px-3">Agentic Engineering</span>
+                        <span className="max-w-full break-words px-2 py-1 text-white sm:px-3">Design Engineering</span>
                     </div>
                 </div>
             </div>
