@@ -1,9 +1,8 @@
 /**
  * Bridge between the WebGL background and the UI around it.
  *
- * The panorama is fetched inside SkyBackground, but the loading screen needs its download
- * progress, the Enter button needs to trigger the gyroscope permission request, and the theme
- * toggle needs to swap panoramas. iOS only grants motion access from inside a real user
+ * SkyBackground reports asset loading progress and connects the scene to the Enter button
+ * and theme toggle. iOS only grants motion access from inside a real user
  * gesture, so the gyro requester has to be callable synchronously from a click handler.
  */
 

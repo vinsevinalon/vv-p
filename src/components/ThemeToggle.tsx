@@ -2,12 +2,7 @@ import { useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { readStoredTheme, storeTheme, switchSkyTo, type SkyTheme } from '../lib/skyBridge';
 
-/**
- * Switches the panorama between the day and night skies.
- *
- * The other sky is only fetched the first time it is asked for, so the first switch waits on
- * a multi-megabyte download. The button reports that with a pulse rather than freezing.
- */
+/** Switches the background lighting between day and night. */
 export default function ThemeToggle() {
     const [theme, setTheme] = useState<SkyTheme>(() => readStoredTheme());
     const [busy, setBusy] = useState(false);

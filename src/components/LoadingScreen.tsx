@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { onSkyProgress, requestGyroNow } from '../lib/skyBridge';
 
 /**
- * Covers the page while the panorama downloads, then hands over on a deliberate click.
+ * Covers the page while the background assets load, then hands over on a deliberate click.
  *
  * That click is doing real work beyond navigation: iOS only grants motion-sensor access from
  * inside a genuine user gesture, so entering the site is what unlocks the gyroscope. Nothing
