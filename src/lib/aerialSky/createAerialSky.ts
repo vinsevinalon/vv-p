@@ -246,7 +246,7 @@ export function createAerialSky(
     const dt = Math.min(Math.max(rawDtMs / 1000, 0.001), 0.05);
 
     if (!contextLost) {
-      const nightSmooth = 1 - Math.exp(-dt * 3.8);
+      const nightSmooth = reducedMotion ? 1 : 1 - Math.exp(-dt * 3.8);
       currentNight = THREE.MathUtils.lerp(currentNight, targetNight, nightSmooth);
       if (Math.abs(currentNight - targetNight) < 0.001) currentNight = targetNight;
 
@@ -288,7 +288,7 @@ export function createAerialSky(
         activeSunDir,
         currentNight,
         elapsedTime,
-        dt,
+        reducedMotion ? 0 : dt,
         speedScale
       );
 
