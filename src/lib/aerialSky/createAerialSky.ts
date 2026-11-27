@@ -252,11 +252,10 @@ export function createAerialSky(
 
       activeSunDir.copy(daySunDir).lerp(nightSunDir, currentNight).normalize();
 
-      const speedScale = reducedMotion ? 0.3 : 1;
-      elapsedTime += dt * speedScale;
+      elapsedTime += dt;
 
       // Single unified physical airspeed (26 units/s) drives BOTH 3D land and every cloud shelf!
-      flightTravel += dt * 26.0 * speedScale;
+      flightTravel += dt * 26.0;
       flightOffset2D.set(
         FLIGHT_DIR_XZ.x * flightTravel,
         FLIGHT_DIR_XZ.y * flightTravel
@@ -288,8 +287,7 @@ export function createAerialSky(
         activeSunDir,
         currentNight,
         elapsedTime,
-        dt,
-        speedScale
+        dt
       );
 
       // Calm, weighty buoyant drift when gliding through dense cloud vapor (zero high-frequency jitter!)

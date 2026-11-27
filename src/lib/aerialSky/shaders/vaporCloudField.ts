@@ -559,8 +559,7 @@ export interface VaporCloudField {
     sunDir: THREE.Vector3,
     night: number,
     time: number,
-    dt: number,
-    speedScale: number
+    dt: number
   ) => { immersion: number };
   setTextures: (textures: THREE.Texture[]) => void;
   dispose: () => void;
@@ -992,7 +991,7 @@ export function createVaporCloudField(sunDir: THREE.Vector3): VaporCloudField {
         }
       }
     },
-    update(camera, flightTravel, flightOffset2D, nextSunDir, night, time, dt, speedScale) {
+    update(camera, flightTravel, flightOffset2D, nextSunDir, night, time, dt) {
       camRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
       camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
       camFwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -1037,7 +1036,7 @@ export function createVaporCloudField(sunDir: THREE.Vector3): VaporCloudField {
       );
 
       // Strictly monotonic accumulated optical-flow travel (calm, weighty thick-smoke glide — zero flicker!)
-      smokeTravel += dt * 0.50 * speedScale;
+      smokeTravel += dt * 0.50;
 
       if (smoothedImmersion > 0.002) {
         smokeMesh.visible = true;
