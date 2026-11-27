@@ -252,7 +252,7 @@ export function createAerialSky(
 
       activeSunDir.copy(daySunDir).lerp(nightSunDir, currentNight).normalize();
 
-      const speedScale = reducedMotion ? 0.08 : 1;
+      const speedScale = reducedMotion ? 0.3 : 1;
       elapsedTime += dt * speedScale;
 
       // Single unified physical airspeed (26 units/s) drives BOTH 3D land and every cloud shelf!
