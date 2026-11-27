@@ -68,16 +68,16 @@ test('keeps the tap available when Safari requires user activation', async () =>
     expect(await rig.requestGyroPermission()).toBe('active');
 });
 
-test('follows device tilt when Safari does not report a compass heading', () => {
+test.each([false, true])('follows device tilt without a compass heading (Reduce Motion: %s)', (reducedMotion) => {
     TestOrientationEvent.requestPermission = async () => 'granted';
     const rig = new AerialCameraRig();
     rigs.push(rig);
 
-    rig.update(0.1, false);
+    rig.update(0.1, reducedMotion);
     const initial = rig.camera.quaternion.clone();
     mockWindow.dispatchEvent(new TestOrientationEvent(null, 45, 0));
     mockWindow.dispatchEvent(new TestOrientationEvent(null, 60, 15));
-    rig.update(0.1, false);
+    rig.update(0.1, reducedMotion);
 
     expect(rig.camera.quaternion.angleTo(initial)).toBeGreaterThan(0.1);
 });

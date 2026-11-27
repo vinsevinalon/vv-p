@@ -207,17 +207,13 @@ export class AerialCameraRig {
       this.camera.updateProjectionMatrix();
     }
 
-    if (reducedMotion) {
-      this.eulerTmp.set(this.defaultPitch, this.defaultYaw, 0, 'YXZ');
-      this.camera.quaternion.setFromEuler(this.eulerTmp);
-      this.camera.updateMatrixWorld();
-      return;
-    }
-
     if (this.hasGyroReading && this.hasGyroBaseline) {
       this.qFinalTmp.copy(this.gyroBaseQuat).multiply(this.gyroQuat);
       this.gyroSmoothQuat.slerp(this.qFinalTmp, 1 - Math.exp(-Math.min(dt, 0.1) * 14.0));
       this.camera.quaternion.copy(this.gyroSmoothQuat);
+    } else if (reducedMotion) {
+      this.eulerTmp.set(this.defaultPitch, this.defaultYaw, 0, 'YXZ');
+      this.camera.quaternion.setFromEuler(this.eulerTmp);
     } else {
       this.currentYaw = THREE.MathUtils.lerp(this.currentYaw, this.defaultYaw - this.mouseNdcX * 0.16, smooth);
       this.currentPitch = THREE.MathUtils.lerp(this.currentPitch, this.defaultPitch - this.mouseNdcY * 0.09, smooth);
