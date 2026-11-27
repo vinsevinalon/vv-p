@@ -40,6 +40,7 @@ export class AerialCameraRig {
   private gyroSmoothQuat = new THREE.Quaternion();
   private gyroBaseQuat = new THREE.Quaternion();
   private hasGyroBaseline = false;
+  private lastHeading = 0;
   private screenAngle = 0;
 
   // Reusable math scratch objects (zero per-frame GC allocations!)
@@ -73,9 +74,10 @@ export class AerialCameraRig {
 
     const DOE = window.DeviceOrientationEvent as unknown as DeviceOrientationEventiOS;
     if (typeof DOE.requestPermission === 'function') {
-      // iOS 13+ requires an explicit tap gesture to request permission
       this.setGyroStatus('needs-permission');
       this.attachGyroListener();
+      // Safari can confirm an existing grant without prompting on arrival.
+      void this.requestGyroPermission();
     } else {
       // Android Chrome / Foldables: listen automatically over HTTPS, mark active on first valid event
       this.setGyroStatus('inactive');
@@ -92,7 +94,7 @@ export class AerialCameraRig {
     return this.gyroStatus;
   }
 
-  /** Must be called synchronously inside a real tap/click handler on iOS. */
+  /** Safari needs a real tap to show a prompt for a new grant. */
   async requestGyroPermission(): Promise<GyroStatus> {
     if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) {
       this.setGyroStatus('unsupported');
@@ -105,14 +107,13 @@ export class AerialCameraRig {
         const res = await DOE.requestPermission();
         if (this.disposed) return this.gyroStatus;
         if (res === 'granted') {
-          this.hasGyroBaseline = false;
           this.attachGyroListener();
           this.setGyroStatus('active');
-        } else {
+        } else if (!this.hasGyroReading) {
           this.setGyroStatus('denied');
         }
       } catch {
-        this.setGyroStatus('denied');
+        // A cold visit can reject without a gesture. Keep the Enter tap available.
       }
       return this.gyroStatus;
     }
@@ -131,9 +132,11 @@ export class AerialCameraRig {
   }
 
   private handleDeviceOrientation = (ev: DeviceOrientationEvent) => {
-    if (ev.alpha === null || ev.beta === null || ev.gamma === null) return;
+    if (ev.beta === null || ev.gamma === null) return;
 
-    const alpha = ev.alpha * DEG2RAD;
+    // Tilt is usable even if the browser has no heading for this reading.
+    if (ev.alpha !== null) this.lastHeading = ev.alpha;
+    const alpha = this.lastHeading * DEG2RAD;
     const beta = ev.beta * DEG2RAD;
     const gamma = ev.gamma * DEG2RAD;
     const orient = this.screenAngle * DEG2RAD;
