@@ -14,6 +14,8 @@ export default function LoadingScreen() {
     const [dismissed, setDismissed] = useState(false);
     const [stalled, setStalled] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
     useEffect(() => onSkyProgress(setProgress), []);
 
@@ -35,11 +37,17 @@ export default function LoadingScreen() {
     const enter = () => {
         // Synchronous, inside the click: anything awaited first loses the user activation.
         requestGyroNow();
+        if (isIOS) {
+            setDismissed(true);
+            return;
+        }
         setEntering(true);
         window.setTimeout(() => setDismissed(true), 700);
     };
 
     const percent = Math.round(progress * 100);
+    // Avoid compositing a blurred, moving canvas during the iOS entry transition.
+    const backdrop = isIOS ? undefined : 'blur(28px) saturate(115%)';
 
     return (
         <div
@@ -48,14 +56,15 @@ export default function LoadingScreen() {
             aria-label="Loading"
             // Sized like the canvas rather than with inset-0: a fixed element resolves against
             // the viewport minus the scrollbar, which leaves a sliver of sky uncovered.
-            // Blur only, no fill, so the live sky stays visible behind the loader.
             style={{
                 width: '100dvw',
                 height: '100dvh',
-                backdropFilter: 'blur(28px) saturate(115%)',
-                WebkitBackdropFilter: 'blur(28px) saturate(115%)',
+                backdropFilter: backdrop,
+                WebkitBackdropFilter: backdrop,
             }}
-            className={`fixed left-0 top-0 z-[9999] flex items-center justify-center transition-opacity duration-700 ease-out ${
+            className={`fixed left-0 top-0 z-[9999] flex items-center justify-center ${
+                isIOS ? 'bg-[#152942]/80' : 'transition-opacity duration-700 ease-out'
+            } ${
                 entering ? 'pointer-events-none opacity-0' : 'opacity-100'
             }`}
         >
